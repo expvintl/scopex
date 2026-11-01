@@ -1,0 +1,25 @@
+# 构建产物
+/bin/
+/frontend/dist/
+/frontend/node_modules/
+/backend/web/dist/*
+!/backend/web/dist/.gitkeep
+
+# 运行期数据
+/.run/
+/.mongo/
+/data/
+*.log
+
+# 本地工具链缓存
+/.cache/
+/backend/.cache/
+/backend/.gocache.sh
+
+# 编辑器 / 系统
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.exe

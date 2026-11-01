@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#eef2f8" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#05080e" />
+    <title>Scopex · 网络空间资产测绘</title>
+    <script>
+      ;(function () {
+        var theme = 'dark'
+        try {
+          var mode = localStorage.getItem('scopex.theme') || 'system'
+          theme =
+            mode === 'system'
+              ? window.matchMedia('(prefers-color-scheme: dark)').matches
+                ? 'dark'
+                : 'light'
+              : mode === 'light'
+                ? 'light'
+                : 'dark'
+        } catch (e) {
+          theme = 'dark'
+        }
+        document.documentElement.dataset.theme = theme
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
