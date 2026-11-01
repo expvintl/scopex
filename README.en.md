@@ -75,7 +75,16 @@ mongod --dbpath ./data --port 27017 --bind_ip 127.0.0.1 --fork --logpath ./log/m
 SCOPEX_ADMIN_PASS='change-me' ./bin/scopex
 ```
 
-The administrator account is created on first start (username `admin`). If `SCOPEX_ADMIN_PASS` is unset, a random password is printed to the startup log.
+The administrator account is created on first start (username `admin`). If `SCOPEX_ADMIN_PASS` is unset, the random password is shown exactly once — in a boxed `====` notice on the console, and in the log file (default `data/logs/scopex.log`):
+
+```
+==============================================================
+  首次安装：已创建管理员账号
+    用户名: admin
+    密码:   rGG89WDAxNmYHx
+    提示: 登录后请立即修改密码
+==============================================================
+```
 
 Open <http://127.0.0.1:8088> to reach the console.
 
@@ -96,8 +105,8 @@ Everything is configured through environment variables:
 | `SCOPEX_LISTEN` | `:8088` | HTTP listen address |
 | `SCOPEX_MONGO_URI` | `mongodb://127.0.0.1:27017` | MongoDB connection string |
 | `SCOPEX_MONGO_DB` | `scopex` | Database name |
-| `SCOPEX_JWT_SECRET` | development default | JWT signing key — change in production |
-| `SCOPEX_TOKEN_TTL` | `12h` | Login token lifetime |
+| `SCOPEX_JWT_SECRET` | generated and stored in MongoDB | JWT signing key; set it explicitly when running multiple instances |
+| `SCOPEX_TOKEN_TTL` | `24h` | Login token lifetime (deleting an account, changing a password or role, or wiping the database revokes tokens immediately, regardless of TTL) |
 | `SCOPEX_ADMIN_USER` / `SCOPEX_ADMIN_PASS` | `admin` / random | Initial administrator |
 | `SCOPEX_MAX_TARGETS` | `65536` | Maximum addresses per task |
 | `SCOPEX_MAX_RATE` | `20000` | Maximum packets per second per task |
@@ -110,6 +119,16 @@ Everything is configured through environment variables:
 | `SCOPEX_GEO_CITY_URL` | DB-IP city lite | City database URL, `{month}` expands to the current month |
 | `SCOPEX_GEO_ASN_URL` | DB-IP asn lite | ASN database URL, `{month}` expands to the current month |
 | `SCOPEX_DEV_MODE` | `false` | Development mode (relaxes CORS) |
+| `SCOPEX_LOG_FILE` | `data/logs/scopex.log` | Detailed log file; `off` keeps console output only |
+| `SCOPEX_LOG_LEVEL` | `info` | Minimum level written to the log file (`debug`/`info`/`warn`/`error`) |
+| `SCOPEX_LOG_CONSOLE_LEVEL` | `warn` | Minimum level printed to the console; startup, readiness and the initial password are always shown |
+| `SCOPEX_LOG_MAX_MB` / `SCOPEX_LOG_BACKUPS` | `20` / `3` | Per-file size limit and number of rotated files (`.1`, `.2`, …) |
+
+The console keeps only start-up, readiness and error messages; every HTTP request, scanner probe and task detail goes to the log file:
+
+```bash
+tail -f data/logs/scopex.log
+```
 
 ## Query syntax
 

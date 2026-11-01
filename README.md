@@ -75,7 +75,16 @@ mongod --dbpath ./data --port 27017 --bind_ip 127.0.0.1 --fork --logpath ./log/m
 SCOPEX_ADMIN_PASS='换成你的密码' ./bin/scopex
 ```
 
-首次启动会创建管理员账号（默认 `admin`）。未设置 `SCOPEX_ADMIN_PASS` 时，随机初始密码会打印在启动日志中。
+首次启动会创建管理员账号（默认 `admin`）。未设置 `SCOPEX_ADMIN_PASS` 时，随机初始密码只出现这一次，会以 `====` 方框醒目打印在屏幕上，同时也写进日志文件（默认 `data/logs/scopex.log`）：
+
+```
+==============================================================
+  首次安装：已创建管理员账号
+    用户名: admin
+    密码:   rGG89WDAxNmYHx
+    提示: 登录后请立即修改密码
+==============================================================
+```
 
 打开 <http://127.0.0.1:8088> 进入控制台。
 
@@ -96,8 +105,8 @@ cd frontend && npm run dev     # http://127.0.0.1:5173，/api 代理到 :8088
 | `SCOPEX_LISTEN` | `:8088` | HTTP 监听地址 |
 | `SCOPEX_MONGO_URI` | `mongodb://127.0.0.1:27017` | MongoDB 连接串 |
 | `SCOPEX_MONGO_DB` | `scopex` | 数据库名 |
-| `SCOPEX_JWT_SECRET` | 开发默认值 | JWT 签名密钥，生产必须修改 |
-| `SCOPEX_TOKEN_TTL` | `12h` | 登录令牌有效期 |
+| `SCOPEX_JWT_SECRET` | 自动生成并存入数据库 | JWT 签名密钥；多实例部署时请显式指定，保证各实例一致 |
+| `SCOPEX_TOKEN_TTL` | `24h` | 登录令牌有效期（账号被删、改密码、改角色、数据库重置都会让令牌立即失效，与 TTL 无关） |
 | `SCOPEX_ADMIN_USER` / `SCOPEX_ADMIN_PASS` | `admin` / 随机 | 初始管理员 |
 | `SCOPEX_MAX_TARGETS` | `65536` | 单任务最大目标地址数 |
 | `SCOPEX_MAX_RATE` | `20000` | 单任务速率上限（包/秒） |
@@ -110,6 +119,16 @@ cd frontend && npm run dev     # http://127.0.0.1:5173，/api 代理到 :8088
 | `SCOPEX_GEO_CITY_URL` | DB-IP city lite | 城市库下载地址，`{month}` 替换为当前月份 |
 | `SCOPEX_GEO_ASN_URL` | DB-IP asn lite | ASN 库下载地址，`{month}` 替换为当前月份 |
 | `SCOPEX_DEV_MODE` | `false` | 开发模式（放开 CORS） |
+| `SCOPEX_LOG_FILE` | `data/logs/scopex.log` | 明细日志文件；填 `off` 只在屏幕输出 |
+| `SCOPEX_LOG_LEVEL` | `info` | 写入日志文件的最低级别（`debug`/`info`/`warn`/`error`） |
+| `SCOPEX_LOG_CONSOLE_LEVEL` | `warn` | 打印到屏幕的最低级别；启动、就绪、初始密码等关键信息不受此限制 |
+| `SCOPEX_LOG_MAX_MB` / `SCOPEX_LOG_BACKUPS` | `20` / `3` | 单个日志文件上限与保留份数（轮转为 `.1`、`.2`…） |
+
+屏幕上只显示启动、就绪、错误等关键信息；每条 HTTP 请求、扫描工具探测、任务明细都写进日志文件，排查问题时看文件即可：
+
+```bash
+tail -f data/logs/scopex.log
+```
 
 ## 查询语法
 

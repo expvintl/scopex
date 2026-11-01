@@ -4,13 +4,46 @@ on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "版本号，必须以 v 开头（例如 v0.2.0）；会在当前提交上创建该标签并发布"
+        required: true
+        type: string
 
 permissions:
   contents: write
 
 jobs:
+  # 推送标签和手动触发拿到的版本号来源不同，先统一成一个值并校验格式，
+  # 后面的构建与发布都用它，避免出现 actions 报 "GitHub Releases requires a tag"。
+  prepare:
+    name: 校验版本号
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.verify.outputs.tag }}
+    steps:
+      - id: verify
+        shell: bash
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            tag="${INPUT_TAG}"
+          else
+            tag="${GITHUB_REF_NAME}"
+          fi
+          tag="${tag#refs/tags/}"
+          if ! printf '%s' "${tag}" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$'; then
+            echo "::error::版本号 '${tag}' 不合法，请使用 vX.Y.Z 形式（可带 -rc1 之类后缀）"
+            exit 1
+          fi
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+          echo "将发布版本 ${tag}"
+
   build:
     name: ${{ matrix.goos }}/${{ matrix.goarch }}
+    needs: prepare
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -48,14 +81,11 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: "0"
+          VERSION: ${{ needs.prepare.outputs.tag }}
         run: |
           set -euo pipefail
-          version="${GITHUB_REF_NAME}"
-          if [ "${GITHUB_REF_TYPE}" != "tag" ]; then
-            version="dev-${GITHUB_SHA::7}"
-          fi
-          name="scopex_${version}_${GOOS}_${GOARCH}"
-          ldflags="-s -w -X github.com/expvintl/scopex/internal/version.Version=${version}"
+          name="scopex_${VERSION}_${GOOS}_${GOARCH}"
+          ldflags="-s -w -X github.com/expvintl/scopex/internal/version.Version=${VERSION}"
           go build -trimpath -ldflags "${ldflags}" -o "../dist/${name}" ./cmd/server
 
           cd ../dist
@@ -77,7 +107,7 @@ jobs:
 
   release:
     name: Publish release
-    needs: build
+    needs: [prepare, build]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -88,9 +118,15 @@ jobs:
       - name: List assets
         run: ls -lh dist
 
-      - uses: softprops/action-gh-release@v2
+      - name: Publish
+        uses: softprops/action-gh-release@v2
         with:
+          # 必须显式给出标签名：手动触发时 github.ref 是分支而非标签，
+          # 缺省的 tag_name 会退化成 ref_name 并触发 "GitHub Releases requires a tag"。
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          name: Scopex ${{ needs.prepare.outputs.tag }}
+          target_commitish: ${{ github.sha }}
           files: dist/*
           generate_release_notes: true
           draft: false
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          prerelease: ${{ contains(needs.prepare.outputs.tag, '-') }}
