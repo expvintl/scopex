@@ -1,6 +1,8 @@
 package api
 
 import (
+	"context"
+	"crypto/subtle"
 	"fmt"
 	"net/http"
 	"strings"
@@ -15,24 +17,31 @@ import (
 	"github.com/expvintl/scopex/internal/util"
 )
 
-const ctxUserKey = "scopex.user"
+const (
+	ctxUserKey  = "scopex.user"
+	tokenIssuer = "scopex"
+)
 
+// sessionClaims 只携带“这是谁、这是哪一次会话”，不携带任何权限信息：
+// 角色一律以数据库中的当前值为准，避免令牌被改权或删号后仍然生效。
 type sessionClaims struct {
-	Username string `json:"name"`
-	Role     string `json:"role"`
+	SessionNonce string `json:"sid,omitempty"`
 	jwt.RegisteredClaims
 }
 
 func (s *Server) issueToken(u *model.User) (string, time.Time, error) {
+	if s.cfg.JWTSecret == "" {
+		return "", time.Time{}, fmt.Errorf("未配置签名密钥")
+	}
 	now := time.Now()
 	expire := now.Add(s.cfg.TokenTTL)
 	claims := sessionClaims{
-		Username: u.Username,
-		Role:     u.Role,
+		SessionNonce: u.SessionNonce,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   u.ID.Hex(),
-			Issuer:    "scopex",
+			Issuer:    tokenIssuer,
 			IssuedAt:  jwt.NewNumericDate(now),
+			NotBefore: jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(expire),
 		},
 	}
@@ -41,35 +50,52 @@ func (s *Server) issueToken(u *model.User) (string, time.Time, error) {
 }
 
 func (s *Server) parseToken(raw string) (*sessionClaims, error) {
+	if s.cfg.JWTSecret == "" {
+		return nil, fmt.Errorf("未配置签名密钥")
+	}
 	claims := &sessionClaims{}
 	token, err := jwt.ParseWithClaims(raw, claims, func(t *jwt.Token) (any, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("非法的签名算法")
 		}
 		return []byte(s.cfg.JWTSecret), nil
-	})
+	},
+		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
+		jwt.WithExpirationRequired(),
+		jwt.WithIssuer(tokenIssuer),
+	)
 	if err != nil || !token.Valid {
 		return nil, fmt.Errorf("令牌无效")
 	}
 	return claims, nil
 }
 
-func (s *Server) userFromToken(raw string) *model.User {
+// resolveSession 校验令牌后必须回数据库确认账号仍然存在、且会话标识没有被重置。
+//
+// 这里不缓存结果是有意为之：删号、改密码、改角色、删库重建都必须在下一次请求就生效。
+func (s *Server) resolveSession(ctx context.Context, raw string) *model.User {
 	claims, err := s.parseToken(raw)
-	if err != nil {
+	if err != nil || claims.SessionNonce == "" {
 		return nil
 	}
 	oid, err := primitive.ObjectIDFromHex(claims.Subject)
 	if err != nil {
 		return nil
 	}
-	return &model.User{ID: oid, Username: claims.Username, Role: claims.Role}
+	u, err := s.store.FindUserByID(ctx, oid)
+	if err != nil || u.SessionNonce == "" {
+		return nil
+	}
+	if subtle.ConstantTimeCompare([]byte(u.SessionNonce), []byte(claims.SessionNonce)) != 1 {
+		return nil
+	}
+	return u
 }
 
 func (s *Server) requireAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if h := c.GetHeader("Authorization"); strings.HasPrefix(h, "Bearer ") {
-			if u := s.userFromToken(strings.TrimSpace(strings.TrimPrefix(h, "Bearer "))); u != nil {
+			if u := s.resolveSession(c.Request.Context(), strings.TrimSpace(strings.TrimPrefix(h, "Bearer "))); u != nil {
 				c.Set(ctxUserKey, u)
 				c.Next()
 				return
@@ -85,7 +111,7 @@ func (s *Server) requireAuth() gin.HandlerFunc {
 		// 图片、导出等无法附加请求头的场景允许通过查询参数传递令牌。
 		if c.Request.Method == http.MethodGet {
 			if tok := strings.TrimSpace(c.Query("token")); tok != "" {
-				if u := s.userFromToken(tok); u != nil {
+				if u := s.resolveSession(c.Request.Context(), tok); u != nil {
 					c.Set(ctxUserKey, u)
 					c.Next()
 					return
@@ -129,23 +155,34 @@ func (s *Server) login(c *gin.Context) {
 		fail(c, http.StatusUnauthorized, "用户名或密码错误")
 		return
 	}
+	// 历史账号可能没有会话标识（升级前创建），登录时补一个，之后签发的令牌才可校验。
+	if u.SessionNonce == "" {
+		nonce, err := s.store.RotateSessionNonce(c.Request.Context(), u.Username)
+		if err != nil {
+			fail(c, http.StatusInternalServerError, "签发令牌失败")
+			return
+		}
+		u.SessionNonce = nonce
+	}
 	token, expire, err := s.issueToken(u)
 	if err != nil {
 		fail(c, http.StatusInternalServerError, "签发令牌失败")
 		return
 	}
 	s.store.TouchLogin(c.Request.Context(), u.Username)
+	now := time.Now()
+	u.LastLoginAt = &now
 	ok(c, gin.H{"token": token, "expiresAt": expire, "user": u})
 }
 
+// me 返回的是中间件刚从数据库读到的账号，因此用户名、角色、API Key 都是最新值。
 func (s *Server) me(c *gin.Context) {
 	u := currentUser(c)
-	fresh, err := s.store.FindUser(c.Request.Context(), u.Username)
-	if err != nil {
-		fail(c, http.StatusUnauthorized, "用户不存在")
+	if u == nil {
+		fail(c, http.StatusUnauthorized, "未认证或登录已过期")
 		return
 	}
-	ok(c, fresh)
+	ok(c, u)
 }
 
 func (s *Server) changePassword(c *gin.Context) {
@@ -172,11 +209,19 @@ func (s *Server) changePassword(c *gin.Context) {
 		fail(c, http.StatusInternalServerError, "加密失败")
 		return
 	}
-	if err := s.store.UpdatePassword(c.Request.Context(), u.Username, string(hash)); err != nil {
+	// 改密码同时旋转会话标识：其它设备上的旧令牌立刻失效，当前设备用新令牌继续。
+	nonce, err := s.store.UpdatePassword(c.Request.Context(), u.Username, string(hash))
+	if err != nil {
 		fail(c, http.StatusInternalServerError, "保存失败")
 		return
 	}
-	ok(c, gin.H{"message": "密码已更新"})
+	u.SessionNonce = nonce
+	token, expire, err := s.issueToken(u)
+	if err != nil {
+		fail(c, http.StatusInternalServerError, "签发令牌失败")
+		return
+	}
+	ok(c, gin.H{"message": "密码已更新", "token": token, "expiresAt": expire})
 }
 
 func (s *Server) rotateAPIKey(c *gin.Context) {

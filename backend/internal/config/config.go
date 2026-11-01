@@ -1,10 +1,13 @@
 package config
 
 import (
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/expvintl/scopex/internal/logging"
 )
 
 // Config 是服务端的全局配置，全部来自环境变量（见 README）。
@@ -22,6 +25,17 @@ type Config struct {
 
 	Scanner ScannerConfig
 	Geo     GeoConfig
+	Log     LogConfig
+}
+
+// LogConfig 控制屏幕与日志文件的详细程度。
+type LogConfig struct {
+	// File 为日志文件路径，空表示只写屏幕。
+	File         string
+	Level        slog.Level // 文件级别，默认 info
+	ConsoleLevel slog.Level // 屏幕级别，默认 warn
+	MaxMB        int
+	Backups      int
 }
 
 type ScannerConfig struct {
@@ -68,6 +82,13 @@ func Load() Config {
 			ProbeTimeout:    envDuration("SCOPEX_PROBE_TIMEOUT", 10*time.Second),
 			DenyCIDRs:       splitList(env("SCOPEX_DENY_CIDRS", "224.0.0.0/4,240.0.0.0/4")),
 		},
+		Log: LogConfig{
+			File:         logFile(env("SCOPEX_LOG_FILE", "data/logs/scopex.log")),
+			Level:        logging.ParseLevel(env("SCOPEX_LOG_LEVEL", "info"), slog.LevelInfo),
+			ConsoleLevel: logging.ParseLevel(env("SCOPEX_LOG_CONSOLE_LEVEL", "warn"), slog.LevelWarn),
+			MaxMB:        envInt("SCOPEX_LOG_MAX_MB", 20),
+			Backups:      envInt("SCOPEX_LOG_BACKUPS", 3),
+		},
 		Geo: GeoConfig{
 			Enabled:      envBool("SCOPEX_GEO_ENABLED", true),
 			Dir:          env("SCOPEX_GEO_DIR", "data/geoip"),
@@ -77,9 +98,8 @@ func Load() Config {
 			Timeout:      envDuration("SCOPEX_GEO_TIMEOUT", 6*time.Second),
 		},
 	}
-	if c.JWTSecret == "" {
-		c.JWTSecret = "scopex-dev-secret-change-me"
-	}
+	// JWTSecret 留空表示“未通过环境变量指定”：启动时会生成随机密钥并保存到数据库。
+	// 这里不再提供固定默认值，否则任何人都能用仓库里的常量伪造管理员令牌。
 	return c
 }
 
@@ -122,4 +142,13 @@ func splitList(s string) []string {
 		}
 	}
 	return out
+}
+
+// logFile 解析日志路径，“off/none/-” 表示关闭文件日志。
+func logFile(v string) string {
+	switch strings.ToLower(v) {
+	case "off", "none", "-", "stdout":
+		return ""
+	}
+	return v
 }

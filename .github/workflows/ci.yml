@@ -15,6 +15,17 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    services:
+      # 会话相关的测试需要真实 MongoDB；没有 SCOPEX_TEST_MONGO 时这些测试自动跳过。
+      mongo:
+        image: mongo:6
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 })'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
 
@@ -27,6 +38,8 @@ jobs:
         run: go vet ./...
 
       - name: go test
+        env:
+          SCOPEX_TEST_MONGO: mongodb://127.0.0.1:27017
         run: go test ./...
 
       - name: go build

@@ -19,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { api } from '@/lib/api'
+import { api, setToken } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import type { GeoLibraryStatus, ScanSettingsPayload, ToolInfo, User } from '@/lib/types'
 import { t } from '@/lib/i18n'
@@ -77,11 +77,13 @@ function AccountPanel() {
     setBusy(true)
     setNotice({ tone: 'ok', message: '' })
     try {
-      await api.changePassword(oldPassword, password)
+      const res = await api.changePassword(oldPassword, password)
+      // 改密码会让其它设备上的旧令牌失效，当前设备用服务端返回的新令牌继续。
+      if (res.data.token) setToken(res.data.token)
       setOldPassword('')
       setPassword('')
       setConfirm('')
-      setNotice({ tone: 'ok', message: t('密码已更新') })
+      setNotice({ tone: 'ok', message: t('密码已更新，其他设备已退出登录') })
     } catch (err) {
       setNotice({ tone: 'error', message: err instanceof Error ? err.message : t('修改密码失败') })
     } finally {

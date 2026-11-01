@@ -98,6 +98,7 @@ const en: Record<string, string> = {
   '字段查询可组合使用 &&、||、! 与括号，默认按 AND 处理空格。': 'Combine fields with &&, ||, ! and parentheses; spaces are treated as AND.',
   '密码': 'Password',
   '密码已更新': 'Password updated',
+  '密码已更新，其他设备已退出登录': 'Password updated. Other devices have been signed out.',
   '已中断': 'Interrupted',
   '已加载': 'Loaded',
   '已取消': 'Canceled',

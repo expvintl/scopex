@@ -169,7 +169,7 @@ export const api = {
     request<{ data: { logs: TaskLog[]; last: number } }>(`/tasks/${id}/logs${qs({ after })}`),
 
   changePassword: (oldPassword: string, newPassword: string) =>
-    request<{ data: { message: string } }>('/auth/password', {
+    request<{ data: { message: string; token: string; expiresAt: string } }>('/auth/password', {
       method: 'POST',
       body: JSON.stringify({ oldPassword, newPassword }),
     }),

@@ -53,33 +53,37 @@ func (s *Server) Router() *gin.Engine {
 
 	auth := api.Group("", s.requireAuth())
 	{
+		// 自助接口：任何登录用户都能改自己的密码与 API Key。
 		auth.GET("/auth/me", s.me)
 		auth.POST("/auth/password", s.changePassword)
 		auth.POST("/auth/apikey", s.rotateAPIKey)
 
+		// 只读接口：viewer 可访问。
 		auth.GET("/hosts", s.searchHosts)
 		auth.GET("/hosts/facets", s.hostFacets)
 		auth.GET("/hosts/export", s.exportHosts)
 		auth.GET("/ips/:ip", s.ipHosts)
-		auth.POST("/ips/:ip/refresh", s.refreshIP)
 		auth.GET("/hosts/:id", s.getHost)
 		auth.GET("/hosts/:id/favicon", s.hostFavicon)
+		auth.GET("/tasks", s.listTasks)
+		auth.GET("/tasks/:id", s.getTask)
+		auth.GET("/tasks/:id/logs", s.taskLogs)
+		auth.GET("/stats/overview", s.overview)
+		auth.GET("/system/tools", s.tools)
+		auth.GET("/system/scan-settings", s.scanSettings)
+		auth.GET("/system/geo", s.geoSettings)
+
+		// 会发起探测或改动数据的接口一律要求管理员，viewer 是只读角色。
+		auth.POST("/ips/:ip/refresh", s.requireAdmin(), s.refreshIP)
 		auth.DELETE("/hosts/:id", s.requireAdmin(), s.deleteHost)
 
-		auth.GET("/tasks", s.listTasks)
-		auth.POST("/tasks", s.createTask)
-		auth.GET("/tasks/:id", s.getTask)
-		auth.POST("/tasks/:id/cancel", s.cancelTask)
-		auth.GET("/tasks/:id/logs", s.taskLogs)
+		auth.POST("/tasks", s.requireAdmin(), s.createTask)
+		auth.POST("/tasks/:id/cancel", s.requireAdmin(), s.cancelTask)
 		auth.DELETE("/tasks", s.requireAdmin(), s.deleteFinishedTasks)
 		auth.DELETE("/tasks/:id", s.requireAdmin(), s.deleteTask)
 		auth.DELETE("/hosts", s.requireAdmin(), s.deleteHostsByIP)
 
-		auth.GET("/stats/overview", s.overview)
-		auth.GET("/system/tools", s.tools)
-		auth.GET("/system/scan-settings", s.scanSettings)
 		auth.PUT("/system/scan-settings", s.requireAdmin(), s.saveScanSettings)
-		auth.GET("/system/geo", s.geoSettings)
 		auth.PUT("/system/geo", s.requireAdmin(), s.saveGeoSettings)
 		auth.POST("/system/geo/refresh", s.requireAdmin(), s.refreshGeo)
 

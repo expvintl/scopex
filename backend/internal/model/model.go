@@ -138,7 +138,10 @@ type User struct {
 	Username     string             `bson:"username" json:"username"`
 	PasswordHash string             `bson:"password_hash" json:"-"`
 	Role         string             `bson:"role" json:"role"`
-	APIKey       string             `bson:"api_key,omitempty" json:"apiKey,omitempty"`
-	CreatedAt    time.Time          `bson:"created_at" json:"createdAt"`
-	LastLoginAt  *time.Time         `bson:"last_login_at,omitempty" json:"lastLoginAt,omitempty"`
+	// SessionNonce 是当前会话标识，随令牌一起签发；改密码或删库重建账号都会换掉它，
+	// 旧令牌在新值出现后立即失效。
+	SessionNonce string     `bson:"session_nonce,omitempty" json:"-"`
+	APIKey       string     `bson:"api_key,omitempty" json:"apiKey,omitempty"`
+	CreatedAt    time.Time  `bson:"created_at" json:"createdAt"`
+	LastLoginAt  *time.Time `bson:"last_login_at,omitempty" json:"lastLoginAt,omitempty"`
 }
