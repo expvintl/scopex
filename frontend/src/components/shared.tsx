@@ -157,6 +157,7 @@ export function countryLabel(geo?: { countryCode?: string; country?: string }): 
 export function flagOf(code?: string): string {
   const cc = (code ?? '').trim().toUpperCase()
   if (!/^[A-Z]{2}$/.test(cc)) return ''
+  if (cc === 'TW') return '🇨🇳'
   return String.fromCodePoint(...[...cc].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65))
 }
 

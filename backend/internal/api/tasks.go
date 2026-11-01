@@ -117,7 +117,17 @@ func (s *Server) listTasks(c *gin.Context) {
 	if items == nil {
 		items = []model.Task{}
 	}
+	for i := range items {
+		normalizeTask(&items[i])
+	}
 	okList(c, items, total, page, size)
+}
+
+// normalizeTask 保证 JSON 中集合字段始终为数组，避免前端处理 null。
+func normalizeTask(t *model.Task) {
+	if t.Targets == nil {
+		t.Targets = []string{}
+	}
 }
 
 func (s *Server) getTask(c *gin.Context) {
@@ -131,6 +141,7 @@ func (s *Server) getTask(c *gin.Context) {
 		fail(c, http.StatusNotFound, "任务不存在")
 		return
 	}
+	normalizeTask(task)
 	ok(c, gin.H{"task": task, "running": s.engine.Running(id)})
 }
 
@@ -195,6 +206,11 @@ func (s *Server) taskLogs(c *gin.Context) {
 	if err != nil {
 		fail(c, http.StatusInternalServerError, "读取日志失败")
 		return
+	}
+	// 增量拉取没有新日志时 Go 的 nil 切片会被编码成 null，前端按数组处理就会报
+	// "Cannot read properties of null"；这里统一成空数组。
+	if logs == nil {
+		logs = []model.TaskLog{}
 	}
 	last := after
 	for _, l := range logs {

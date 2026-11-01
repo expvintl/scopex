@@ -50,6 +50,16 @@ export interface ASN {
   org: string
 }
 
+/** AIInfo 是主动指纹识别出的 AI 服务信息。 */
+export interface AIInfo {
+  product: string
+  version?: string
+  kind?: string
+  models?: string[]
+  system?: string
+  note?: string
+}
+
 export interface Host {
   id: string
   ip: string
@@ -73,6 +83,7 @@ export interface Host {
   geo: Geo
   asn?: ASN
   scripts?: Record<string, string>
+  ai?: AIInfo
   tags: string[]
   source: string
   firstSeen: string
@@ -135,6 +146,35 @@ export interface Overview {
   topApps: Facet[]
   trend: Trend[]
   taskCounts: Record<string, number>
+  generatedAt: string
+}
+
+/** 汇总页的一个切片：key 是归一化后的键（大洲/品类/操作系统家族），label 是原始取值。 */
+export interface InsightSlice {
+  key: string
+  label?: string
+  count: number
+}
+
+export interface Insights {
+  total: number
+  uniqueIPs: number
+  private: number
+  public: number
+  aiAssets: number
+  countryNum: number
+  asnNum: number
+  countries: InsightSlice[]
+  continents: InsightSlice[]
+  services: InsightSlice[]
+  osFamilies: InsightSlice[]
+  appCategories: InsightSlice[]
+  aiApps: InsightSlice[]
+  devices: InsightSlice[]
+  ports: InsightSlice[]
+  apps: InsightSlice[]
+  asns: InsightSlice[]
+  tlsIssuers: InsightSlice[]
   generatedAt: string
 }
 

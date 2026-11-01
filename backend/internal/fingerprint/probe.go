@@ -21,9 +21,9 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/text/encoding/simplifiedchinese"
 	"github.com/expvintl/scopex/internal/model"
 	"github.com/expvintl/scopex/internal/util"
+	"golang.org/x/text/encoding/simplifiedchinese"
 )
 
 type Result struct {
@@ -42,6 +42,8 @@ type Result struct {
 	OS         string
 	Hostnames  []string
 	Domains    []string
+	Scripts    map[string]string
+	AI         *model.AIInfo
 }
 
 type Prober struct {
@@ -204,6 +206,10 @@ func (p *Prober) probeHTTP(ctx context.Context, ip string, port int, useTLS bool
 	}
 	res.Service = svc
 	res.Apps = p.matchHTTP(res.Headers, text, res.Title, svc.Product)
+
+	if info := p.probeAI(ctx, ip, port, scheme, res); info != nil {
+		applyAI(res, info)
+	}
 
 	if fav := p.fetchFavicon(ctx, scheme, ip, port, text); fav != nil {
 		res.Favicon = fav.Favicon
@@ -615,6 +621,9 @@ func deviceFromApps(apps []string) string {
 			return "nas"
 		case "宝塔面板":
 			return "server-panel"
+		case "Ollama", "ComfyUI", "Stable Diffusion WebUI", "vLLM", "LM Studio",
+			"OpenAI 兼容 API", "Text Generation WebUI", "Qdrant":
+			return "ai-server"
 		}
 	}
 	return ""
@@ -663,6 +672,8 @@ var portServices = map[int]string{
 	9300: "elasticsearch", 11211: "memcached", 27017: "mongodb", 5000: "http", 8000: "http",
 	10000: "http", 15672: "rabbitmq", 5601: "kibana", 3000: "http",
 	5985: "wsman", 5986: "wsmans", 64738: "mumble",
+	8086: "influxdb", 8123: "clickhouse", 8500: "consul", 11434: "ollama",
+	8188: "comfyui", 7860: "http", 2379: "etcd", 6333: "qdrant",
 }
 
 func guessService(port int) string {

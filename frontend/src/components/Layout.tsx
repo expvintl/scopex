@@ -2,6 +2,7 @@ import {
   Crosshair,
   LayoutDashboard,
   LogOut,
+  PieChart,
   Menu,
   Radar,
   Search,
@@ -32,6 +33,7 @@ import { t } from '@/lib/i18n'
 const NAV = [
   { to: '/', label: '态势总览', icon: LayoutDashboard, end: true },
   { to: '/search', label: '资产搜索', icon: Search },
+  { to: '/insights', label: '全球汇总', icon: PieChart },
   { to: '/tasks', label: '扫描任务', icon: Radar },
   { to: '/settings', label: '系统设置', icon: Settings },
 ]
@@ -39,6 +41,7 @@ const NAV = [
 const TITLES: Record<string, string> = {
   '/': '态势总览',
   '/search': '资产搜索',
+  '/insights': '全球汇总',
   '/tasks': '扫描任务',
   '/settings': '系统设置',
 }
@@ -113,15 +116,7 @@ export function Layout() {
           ))}
         </nav>
 
-        <div className="space-y-2 p-2.5">
-          <div className="rounded-lg border border-sidebar-border bg-background/40 p-2.5">
-            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-              <span className="size-1.5 rounded-full bg-ok pulse-dot" />
-              {t('本地部署 · 数据不出域')}
-            </div>
-            <p className="mt-1 text-[10px] tracking-wide text-muted-foreground/70">v0.1.0</p>
-          </div>
-        </div>
+        <div className="p-5 text-[10px] tracking-wide text-muted-foreground/70">v0.1.0</div>
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">

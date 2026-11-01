@@ -505,6 +505,16 @@ function sourceLabel(source?: string): string {
   return source
 }
 
+/** AI 服务类型的中文标签，用于详情面板展示。 */
+const AI_KIND_LABEL: Record<string, string> = {
+  llm: '大语言模型推理',
+  image: '图像生成',
+  platform: 'ML 平台',
+  infra: 'AI 基础设施',
+  db: '向量/时序数据库',
+  ops: '容器编排',
+}
+
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="space-y-2 py-3">
@@ -828,8 +838,31 @@ function PortDetail({ host }: { host: Host }) {
         </Section>
       )}
 
+      {host.ai && (
+        <Section title={t("AI 服务识别")}>
+          <Field label={t("产品")}>
+            {host.ai.product}
+            {host.ai.version ? ` ${host.ai.version}` : ''}
+          </Field>
+          {host.ai.kind && <Field label={t("类型")}>{AI_KIND_LABEL[host.ai.kind] ? t(AI_KIND_LABEL[host.ai.kind]) : host.ai.kind}</Field>}
+          {(host.ai.models ?? []).length > 0 && (
+            <Field label={t("模型")}>
+              <span className="flex flex-wrap gap-1">
+                {(host.ai.models ?? []).map((m) => (
+                  <Badge key={m} variant="outline" className="font-mono">
+                    {m}
+                  </Badge>
+                ))}
+              </span>
+            </Field>
+          )}
+          {host.ai.system && <Field label={t("运行环境")}>{host.ai.system}</Field>}
+          {host.ai.note && <Field label={t("备注")}>{host.ai.note}</Field>}
+        </Section>
+      )}
+
       {host.scripts && Object.keys(host.scripts).length > 0 && (
-        <Section title={t("Nmap 脚本")}>
+        <Section title={t("指纹脚本输出")}>
           <div className="space-y-1.5">
             {Object.entries(host.scripts).map(([key, value]) => (
               <div key={key}>

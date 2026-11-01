@@ -31,6 +31,7 @@ type Host struct {
 	Geo        Geo                `bson:"geo" json:"geo"`
 	ASN        *ASN               `bson:"asn,omitempty" json:"asn,omitempty"`
 	Scripts    map[string]string  `bson:"scripts,omitempty" json:"scripts,omitempty"`
+	AI         *AIInfo            `bson:"ai,omitempty" json:"ai,omitempty"`
 	Tags       []string           `bson:"tags" json:"tags"`
 	Source     string             `bson:"source" json:"source"`
 	FirstSeen  time.Time          `bson:"first_seen" json:"firstSeen"`
@@ -47,6 +48,18 @@ type Service struct {
 	Method     string `bson:"method,omitempty" json:"method,omitempty"`
 	Confidence int    `bson:"confidence,omitempty" json:"confidence,omitempty"`
 	Banner     string `bson:"banner,omitempty" json:"banner,omitempty"`
+}
+
+// AIInfo 是主动指纹识别出的 AI 服务信息。
+// 单独建字段而不是塞进 Scripts：map 的键含点号（如 ai.kind）虽然能存进文档，
+// 但服务端无法用脚本查询到，统计与检索都会失效。
+type AIInfo struct {
+	Product string   `bson:"product" json:"product"`
+	Version string   `bson:"version,omitempty" json:"version,omitempty"`
+	Kind    string   `bson:"kind,omitempty" json:"kind,omitempty"` // llm / image / platform / infra / db / ops
+	Models  []string `bson:"models,omitempty" json:"models,omitempty"`
+	System  string   `bson:"system,omitempty" json:"system,omitempty"`
+	Note    string   `bson:"note,omitempty" json:"note,omitempty"`
 }
 
 type Favicon struct {

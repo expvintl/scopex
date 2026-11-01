@@ -5,6 +5,7 @@ import { Spinner } from '@/components/shared'
 import { useAuth } from '@/lib/auth'
 import { useI18n } from '@/lib/i18n'
 import Dashboard from '@/pages/Dashboard'
+import InsightsPage from '@/pages/Insights'
 import Login from '@/pages/Login'
 import Search from '@/pages/Search'
 import Settings from '@/pages/Settings'
@@ -37,6 +38,7 @@ export default function App() {
         }
       >
         <Route index element={<Dashboard />} />
+        <Route path="insights" element={<InsightsPage />} />
         <Route path="search" element={<Search />} />
         <Route path="tasks" element={<Tasks />} />
         <Route path="settings" element={<Settings />} />

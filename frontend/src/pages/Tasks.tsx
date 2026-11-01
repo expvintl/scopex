@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { cn } from '@/lib/utils'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { api } from '@/lib/api'
@@ -61,7 +62,8 @@ function TaskCard({
 }) {
   const active = isActive(task)
   const percent = Math.min(100, Math.round(task.progress || 0))
-  const targets = task.targets.slice(0, 3).join('、')
+  const targetList = task.targets ?? []
+  const targets = targetList.slice(0, 3).join('、')
 
   return (
     <Card className="transition-colors hover:border-primary/30">
@@ -104,7 +106,7 @@ function TaskCard({
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
           <span className="min-w-0 truncate">
             {t('目标')} {targets || '—'}
-            {task.targets.length > 3 && t(' 等 {n} 项', { n: task.targets.length })}
+            {targetList.length > 3 && t(' 等 {n} 项', { n: targetList.length })}
           </span>
           <span className="break-all font-mono">{t('端口 {ports}', { ports: task.ports })}</span>
         </div>
@@ -153,25 +155,37 @@ function TaskDetail({ id, onClose }: { id: string; onClose: () => void }) {
 
   useEffect(() => {
     let alive = true
+    let timer = 0
+    // 任务是否仍处于活动状态：只有活动中的任务需要持续轮询。
+    let active = true
     const tick = async () => {
       try {
         const res = await api.task(id)
         if (!alive) return
         setTask(res.data.task)
+        setError('')
         const lr = await api.taskLogs(id, lastRef.current)
         if (!alive) return
-        if (lr.data.logs.length) {
+        // 后端在没有新日志时会返回空数组；再兜一层，避免 null 让整个轮询中断。
+        const fresh = lr.data.logs ?? []
+        if (fresh.length) {
           lastRef.current = lr.data.last
-          setLogs((prev) => [...prev, ...lr.data.logs].slice(-500))
+          setLogs((prev) => [...prev, ...fresh].slice(-500))
         }
-        if (res.data.running) window.setTimeout(tick, 1800)
+        // 排队中的任务同样需要继续轮询，否则详情页会一直停在“排队中”。
+        active = res.data.running || res.data.task?.status === 'pending'
+        if (active) timer = window.setTimeout(() => void tick(), 1800)
       } catch (err) {
-        if (alive) setError(err instanceof Error ? err.message : t('加载任务失败'))
+        if (!alive) return
+        setError(err instanceof Error ? err.message : t('加载任务失败'))
+        // 单次请求失败（网络抖动、服务重启）不该让详情页永久停在错误上。
+        if (active) timer = window.setTimeout(() => void tick(), 3000)
       }
     }
     void tick()
     return () => {
       alive = false
+      window.clearTimeout(timer)
     }
   }, [id])
 
@@ -189,7 +203,9 @@ function TaskDetail({ id, onClose }: { id: string; onClose: () => void }) {
             {task && <StatusPill status={task.status} />}
           </DialogTitle>
           <DialogDescription className="font-mono text-[11px]">
-            {task ? `${task.targets.join('、')} · ${t('端口 {ports}', { ports: task.ports })} · ${task.tool}` : t('加载中…')}
+            {task
+              ? `${(task.targets ?? []).join('、')} · ${t('端口 {ports}', { ports: task.ports })} · ${task.tool}`
+              : t('加载中…')}
           </DialogDescription>
         </DialogHeader>
 
@@ -266,10 +282,43 @@ function TaskDetail({ id, onClose }: { id: string; onClose: () => void }) {
   )
 }
 
+// 后端只认 "80,443,1-1024" 形式的表达式，预设直接落成端口串，选中后仍可手动微调。
+const PORT_PRESETS = [
+  {
+    value: 'common',
+    label: '常见服务端口',
+    ports: '21,22,23,25,53,80,110,135,139,143,443,445,465,587,993,995,1433,1521,2049,3306,3389,5432,5900,5985,6379,8080,8443,9000,9090,9200,11211,27017',
+  },
+  { value: 'web', label: 'Web / 中间件', ports: '80,81,443,3000,5000,5601,7001,8000,8008,8009,8080,8081,8082,8088,8090,8180,8443,8848,8888,9000,9001,9090,9200,9300,9443,10000' },
+  { value: 'internal', label: '远程与内网', ports: '22,23,135,139,389,445,636,1433,3306,3389,5432,5900,5985,5986,6379,11211,27017' },
+  { value: 'ai', label: 'AI 与容器', ports: '2375,2376,5000,6443,7860,8000,8080,8081,8188,8888,9090,10250,11434,11435' },
+  {
+    value: 'top100',
+    label: 'Nmap Top 100',
+    ports: '7,9,13,21,22,23,25,26,37,53,79,80,81,88,106,110,111,113,119,135,139,143,144,179,199,389,427,443,444,445,465,513,514,515,543,544,548,554,587,631,646,873,990,993,995,1025,1026,1027,1028,1029,1110,1433,1720,1723,1755,1900,2000,2001,2049,2121,2717,3000,3128,3306,3389,3986,4899,5000,5009,5051,5060,5101,5190,5357,5432,5631,5666,5800,5900,6000,6001,6646,7070,8000,8008,8009,8080,8081,8443,8888,9100,9999,10000,32768,49152,49153,49154,49155,49156,49157',
+  },
+  { value: 'all', label: '全端口（1-65535）', ports: '1-65535' },
+  { value: 'custom', label: '自定义', ports: '' },
+]
+
+// countPorts 只做展示用的端口计数，语法错误时按 0 处理，真正校验交给后端。
+function countPorts(spec: string): number {
+  let total = 0
+  for (const part of spec.split(',')) {
+    const [from, to] = part.trim().split('-')
+    const start = Number(from)
+    const end = to === undefined ? start : Number(to)
+    if (!Number.isInteger(start) || !Number.isInteger(end) || start < 1 || end > 65535 || start > end) continue
+    total += end - start + 1
+  }
+  return total
+}
+
 function CreateTask({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const [name, setName] = useState('')
   const [targets, setTargets] = useState('')
   const [ports, setPorts] = useState('')
+  const [preset, setPreset] = useState('custom')
   const [rate, setRate] = useState('1000')
   const [tool, setTool] = useState('auto')
   const [deep, setDeep] = useState(true)
@@ -282,7 +331,9 @@ function CreateTask({ onClose, onCreated }: { onClose: () => void; onCreated: ()
       .scanSettings()
       .then((res) => {
         if (!alive) return
-        setPorts(res.data.settings.defaultPorts?.trim() || '80,443,8080,8443')
+        const spec = res.data.settings.defaultPorts?.trim() || '80,443,8080,8443'
+        setPorts(spec)
+        setPreset(PORT_PRESETS.find((item) => item.ports === spec)?.value ?? 'custom')
       })
       .catch(() => {
         if (alive) setPorts((prev) => prev || '80,443,8080,8443')
@@ -291,6 +342,15 @@ function CreateTask({ onClose, onCreated }: { onClose: () => void; onCreated: ()
       alive = false
     }
   }, [])
+
+  const applyPreset = (value: string) => {
+    const item = PORT_PRESETS.find((entry) => entry.value === value)
+    if (!item) return
+    setPreset(value)
+    if (item.ports) setPorts(item.ports)
+  }
+
+  const portCount = countPorts(ports)
 
   const submit = async () => {
     const list = targets
@@ -347,30 +407,64 @@ function CreateTask({ onClose, onCreated }: { onClose: () => void; onCreated: ()
             />
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="task-ports">{t("端口")}</Label>
-              <Input id="task-ports" value={ports} onChange={(e) => setPorts(e.target.value)} className="font-mono text-xs" />
+          <div className="space-y-1.5">
+            <div className="flex items-baseline justify-between gap-2">
+              <Label htmlFor="task-ports">{t('端口')}</Label>
+              <span className="text-[11px] text-muted-foreground">
+                {portCount > 0 ? t('共 {n} 个端口', { n: portCount.toLocaleString() }) : t('端口格式：80,443,1000-2000')}
+              </span>
             </div>
+            <div className="flex flex-wrap gap-1.5">
+              {PORT_PRESETS.map((item) => (
+                <button
+                  key={item.value}
+                  type="button"
+                  onClick={() => applyPreset(item.value)}
+                  className={cn(
+                    'rounded-full border px-2.5 py-1 text-[11px] transition-colors',
+                    preset === item.value
+                      ? 'border-primary/40 bg-primary/10 font-medium text-primary'
+                      : 'border-border text-muted-foreground hover:bg-muted',
+                  )}
+                >
+                  {t(item.label)}
+                </button>
+              ))}
+            </div>
+            <Input
+              id="task-ports"
+              value={ports}
+              onChange={(e) => {
+                setPorts(e.target.value)
+                setPreset('custom')
+              }}
+              placeholder={t('端口格式：80,443,1000-2000')}
+              className="font-mono text-xs"
+            />
+            {preset === 'all' && (
+              <p className="text-[11px] text-warn">{t('全端口扫描较慢，按 1000 pps 估算单个目标需数分钟')}</p>
+            )}
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="task-rate">{t("速率（pps）")}</Label>
               <Input id="task-rate" value={rate} onChange={(e) => setRate(e.target.value)} className="font-mono text-xs" />
             </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>{t("扫描引擎")}</Label>
-            <Select value={tool} onValueChange={setTool}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="auto">{t("自动选择（推荐）")}</SelectItem>
-                <SelectItem value="native">{t("原生 TCP")}</SelectItem>
-                <SelectItem value="masscan">Masscan</SelectItem>
-                <SelectItem value="nmap">Nmap</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="space-y-1.5">
+              <Label>{t("扫描引擎")}</Label>
+              <Select value={tool} onValueChange={setTool}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">{t("自动选择（推荐）")}</SelectItem>
+                  <SelectItem value="native">{t("原生 TCP")}</SelectItem>
+                  <SelectItem value="masscan">Masscan</SelectItem>
+                  <SelectItem value="nmap">Nmap</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <label className="flex items-start gap-2.5 rounded-md border border-border p-2.5">

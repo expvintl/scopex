@@ -69,6 +69,7 @@ func (s *Server) Router() *gin.Engine {
 		auth.GET("/tasks/:id", s.getTask)
 		auth.GET("/tasks/:id/logs", s.taskLogs)
 		auth.GET("/stats/overview", s.overview)
+		auth.GET("/stats/insights", s.insights)
 		auth.GET("/system/tools", s.tools)
 		auth.GET("/system/scan-settings", s.scanSettings)
 		auth.GET("/system/geo", s.geoSettings)

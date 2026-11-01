@@ -571,6 +571,8 @@ func buildHost(source string, op scanner.OpenPort, res *fingerprint.Result, g mo
 		CPE:        dedupe(res.CPE),
 		Device:     res.Device,
 		OS:         hostOS(res),
+		Scripts:    res.Scripts,
+		AI:         res.AI,
 		Hostnames:  dedupe(res.Hostnames),
 		Domains:    dedupe(res.Domains),
 		Geo:        g,

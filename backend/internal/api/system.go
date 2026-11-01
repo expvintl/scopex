@@ -25,6 +25,16 @@ func (s *Server) overview(c *gin.Context) {
 	ok(c, ov)
 }
 
+// insights 返回「全球数据汇总」页的跨维度分布。
+func (s *Server) insights(c *gin.Context) {
+	data, err := s.store.BuildInsights(c.Request.Context())
+	if err != nil {
+		failf(c, http.StatusInternalServerError, "汇总失败：%s", i18n.Message(lang(c), err))
+		return
+	}
+	ok(c, data)
+}
+
 func (s *Server) tools(c *gin.Context) {
 	tools := s.registry.Statuses()
 	for i := range tools {

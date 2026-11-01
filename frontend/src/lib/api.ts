@@ -8,6 +8,7 @@ import type {
   Host,
   HostPage,
   IPGroupPage,
+  Insights,
   Overview,
   ScanSettings,
   ScanSettingsPayload,
@@ -86,6 +87,7 @@ export const api = {
   me: () => request<{ data: User }>('/auth/me'),
 
   overview: () => request<{ data: Overview }>('/stats/overview'),
+  insights: () => request<{ data: Insights }>('/stats/insights'),
 
   tools: () => request<{ data: ToolInfo }>('/system/tools'),
 

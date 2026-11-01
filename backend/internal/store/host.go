@@ -4,10 +4,10 @@ import (
 	"context"
 	"time"
 
+	"github.com/expvintl/scopex/internal/model"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"github.com/expvintl/scopex/internal/model"
 )
 
 func (s *Store) UpsertHost(ctx context.Context, h *model.Host) (bool, error) {
@@ -44,6 +44,9 @@ func (s *Store) UpsertHost(ctx context.Context, h *model.Host) (bool, error) {
 	if h.TLS != nil {
 		set["tls"] = h.TLS
 	}
+	if h.AI != nil {
+		set["ai"] = h.AI
+	}
 	update := bson.M{
 		"$set":         set,
 		"$setOnInsert": bson.M{"first_seen": h.FirstSeen},
@@ -51,6 +54,10 @@ func (s *Store) UpsertHost(ctx context.Context, h *model.Host) (bool, error) {
 			"hostnames": bson.M{"$each": h.Hostnames},
 			"domains":   bson.M{"$each": h.Domains},
 		},
+	}
+	// 重新探测时若已不再命中 AI 指纹，清掉旧结论，避免汇总页统计陈旧数据。
+	if h.AI == nil {
+		update["$unset"] = bson.M{"ai": ""}
 	}
 	opts := options.Update().SetUpsert(true)
 	res, err := s.Hosts.UpdateOne(ctx, bson.M{"ip": h.IP, "port": h.Port, "protocol": h.Protocol}, update, opts)
